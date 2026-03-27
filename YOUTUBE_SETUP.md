@@ -1,14 +1,18 @@
 # YouTube Transcript → Quant Idea Extraction: Setup Guide
 
-Extract quant trading ideas from YouTube videos/playlists using Claude API.
+Extract quant trading ideas from 4,392 YouTube transcripts using Claude.
+
+The transcripts are already fetched and cleaned in `youtube_transcripts.parquet`. You just need API credentials and one command.
 
 ---
 
 ## What you need
 
 - **Python 3.10+**
-- **Anthropic API key** — get one at [console.anthropic.com](https://console.anthropic.com)
-- No YouTube API key required (uses `yt-dlp` to pull transcripts for free)
+- **Claude API access** via one of:
+  - Azure AI Foundry (recommended if you have it)
+  - Anthropic API key
+  - AWS Bedrock
 
 ---
 
@@ -16,7 +20,7 @@ Extract quant trading ideas from YouTube videos/playlists using Claude API.
 
 ```bash
 git clone <repo-url>
-cd quant-idea-extractor
+cd extract-ideas-from-transcripts
 
 python -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
@@ -26,111 +30,101 @@ pip install -r requirements.txt
 
 ---
 
-## Step 2 — Add your API key
+## Step 2 — Set your credentials
 
+Pick your backend and export the env vars. You only need ONE of these:
+
+**Azure AI Foundry:**
 ```bash
-cp .env.example .env
+export AZURE_ANTHROPIC_ENDPOINT="https://<resource>-<id>-<region>.services.ai.azure.com/anthropic/"
+export AZURE_ANTHROPIC_API_KEY="your-key"
+export AZURE_ANTHROPIC_DEPLOYMENT="claude-opus-4-6"
 ```
 
-Open `.env` and set:
-
-```
-ANTHROPIC_API_KEY=sk-ant-xxxxxxxxxxxxxxxx
-```
-
-That's the only key needed for YouTube.
-
----
-
-## Step 3 — Set your playlist / channel
-
-Edit `seeds/youtube_channels.yaml`. Add a playlist URL or channel URL:
-
-```yaml
-channels:
-  # Playlist URL (yt-dlp handles both channels and playlists)
-  - name: "My Playlist"
-    url: "https://youtube.com/playlist?list=PLFj8mcG4JCG9a7wnLdUG-EcjcTJ7lgINM"
-
-  # Or a channel URL
-  - name: "QuantPy"
-    url: "https://www.youtube.com/@QuantPy/videos"
-```
-
-To see what videos are in a playlist before running (no Claude calls, no DB writes):
-
+**Anthropic direct:**
 ```bash
-python temp_metadata_yt_playlist.py
-# Outputs: temp_metadata_yt_playlist.csv with all video titles + links
+export ANTHROPIC_API_KEY=sk-ant-...
+```
+
+**AWS Bedrock:**
+```bash
+export AWS_ACCESS_KEY_ID=...
+export AWS_SECRET_ACCESS_KEY=...
+export AWS_DEFAULT_REGION=us-east-1
 ```
 
 ---
 
-## Step 4 — Collect transcripts
+## Step 3 — Test with a single transcript
+
+> **Do this first!** Processes one video, prints the result, writes nothing to disk.
 
 ```bash
-cd quant-idea-extractor
+# Azure (default)
+python extract_from_parquet.py --test
 
-# Collect transcripts from all channels in youtube_channels.yaml
-python scripts/run_collect.py --source youtube
-
-# Or limit to first N videos per channel (faster for testing)
-python scripts/run_collect.py --source youtube --limit 10
+# Or explicitly pick a backend
+python extract_from_parquet.py --backend azure --test
+python extract_from_parquet.py --backend anthropic --test
+python extract_from_parquet.py --backend bedrock --test
 ```
 
-This fetches auto-generated or manual subtitles via `yt-dlp` and stores them in a local SQLite DB (`data/quant_ideas.db`). No API calls yet, no cost.
-
-> Videos shorter than 3 minutes or with no available transcript are skipped.
+If you see extracted ideas printed to your terminal, you're good.
 
 ---
 
-## Step 5 — Extract ideas with Claude
+## Step 4 — Full run
 
 ```bash
-# $5 cost cap (safe default for ~400 videos)
-python scripts/run_extract.py --batch-size 20 --max-cost 5.0
+# Default: azure backend, 3 workers, $50 cost cap
+python extract_from_parquet.py
 
-# Higher cap for larger runs
-python scripts/run_extract.py --batch-size 50 --max-cost 20.0
+# Or pick a backend
+python extract_from_parquet.py --backend anthropic
+python extract_from_parquet.py --backend bedrock
 ```
 
-This calls `claude-sonnet-4-0` on each transcript and extracts structured quant ideas.
-
-**Cost estimate:** ~$1.20 per 100 YouTube videos (avg 4k tokens/transcript at $3/1M in, $15/1M out).
+Progress is saved after every video to `extract_ideas_progress.jsonl`. If the run is interrupted (Ctrl+C, crash, rate limit), just re-run the same command — it picks up where it left off.
 
 ---
 
-## Step 6 — Export results
+## Outputs
 
-```bash
-# All ideas
-python scripts/export.py --format csv --output ideas.csv
-
-# High-conviction only
-python scripts/export.py \
-    --format csv \
-    --filter-testability high \
-    --filter-confidence high \
-    --output high_conviction.csv
-```
+| File | Description |
+|---|---|
+| `extract_ideas_progress.jsonl` | Checkpoint — one JSON line per video processed |
+| `extracted_ideas.csv` | Final output — one row per idea, with video metadata |
 
 ---
 
 ## Tuning
 
-Key settings in `config.yaml`:
+Edit the constants at the top of `extract_from_parquet.py`:
 
 | Setting | Default | What it does |
 |---|---|---|
-| `youtube.max_videos_per_channel` | `100` | Max videos to pull per channel/playlist |
-| `youtube.min_duration_seconds` | `180` | Skip videos shorter than this |
-| `extraction.max_cost_per_run` | `10.0` | Hard USD cap per extraction run |
-| `extraction.max_concurrent_calls` | `5` | Parallel Claude API calls |
+| `MAX_WORKERS` | `3` | Concurrent API calls (lower = safer for rate limits) |
+| `MAX_TRANSCRIPT` | `15,000` | Chars per transcript (trim long ones to save cost) |
+| `MAX_COST_USD` | `50.0` | Hard stop (approximate, based on token estimates) |
 
 ---
 
-## Check pipeline stats at any time
+## Cost estimate
 
-```bash
-python scripts/run_collect.py --stats
-```
+Using Opus ($15/1M input, $75/1M output):
+- ~4,000 tokens per transcript avg
+- ~$0.27 per video
+- ~$1,200 for all 4,392 videos
+
+Using Sonnet ($3/1M input, $15/1M output):
+- Same token volume
+- ~$0.05 per video
+- ~$230 for all 4,392 videos
+
+To use Sonnet instead, set the env var for your backend (e.g. `AZURE_ANTHROPIC_DEPLOYMENT=claude-sonnet-4-6`).
+
+---
+
+## Backend details
+
+See [agents.md](agents.md) for full env var reference, model IDs, and troubleshooting for each provider.

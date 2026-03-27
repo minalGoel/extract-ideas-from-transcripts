@@ -136,7 +136,7 @@ class AzureBackend:
     auth header and as the "api-key" header that Azure requires.
     """
 
-    DEFAULT_MODEL = "claude-opus-4-5"
+    DEFAULT_MODEL = "claude-opus-4-6"
 
     def __init__(
         self,
@@ -146,9 +146,9 @@ class AzureBackend:
         max_tokens: int = 4096,
     ) -> None:
         import anthropic
-        _endpoint = endpoint or os.environ["AZURE_ENDPOINT"]
-        _key      = api_key  or os.environ["AZURE_API_KEY"]
-        self.model      = model or os.getenv("AZURE_MODEL", self.DEFAULT_MODEL)
+        _endpoint = endpoint or os.getenv("AZURE_ANTHROPIC_ENDPOINT") or os.environ.get("AZURE_ENDPOINT", "")
+        _key      = api_key  or os.getenv("AZURE_ANTHROPIC_API_KEY")  or os.environ.get("AZURE_API_KEY", "")
+        self.model      = model or os.getenv("AZURE_ANTHROPIC_DEPLOYMENT") or os.getenv("AZURE_MODEL", self.DEFAULT_MODEL)
         self.max_tokens = max_tokens
         self._client    = anthropic.Anthropic(
             api_key=_key,

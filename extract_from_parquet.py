@@ -12,13 +12,15 @@ is safe to kill and restart at any time.
 QUICK START
 ──────────────────────────────────────────────────────────────────────────────
 
-  # 1. Set your API key (Anthropic direct):
-  export ANTHROPIC_API_KEY=sk-ant-...
+  # 1. Test with Azure (no files written):
+  python extract_from_parquet.py --backend azure --test
 
-  # 2. Run:
-  python extract_from_parquet.py
+  # 2. Full run with Azure:
+  python extract_from_parquet.py --backend azure
 
-  # 3. To use Bedrock or Azure instead, edit the BACKEND section below.
+  # 3. Other backends:
+  python extract_from_parquet.py --backend anthropic   # needs ANTHROPIC_API_KEY
+  python extract_from_parquet.py --backend bedrock      # needs AWS creds
 
 ──────────────────────────────────────────────────────────────────────────────
 OUTPUTS
@@ -47,11 +49,28 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # ──────────────────────────────────────────────────────────────────────────────
-# BACKEND — swap this one import to change providers
+# BACKEND — selected via --backend flag (default: azure)
 # ──────────────────────────────────────────────────────────────────────────────
 
-from llm_backends import AnthropicBackend  # ← change to BedrockBackend or AzureBackend
-BACKEND = AnthropicBackend()
+from llm_backends import AnthropicBackend, BedrockBackend, AzureBackend
+
+def _pick_backend() -> AnthropicBackend | BedrockBackend | AzureBackend:
+    name = "azure"  # default
+    for i, arg in enumerate(sys.argv):
+        if arg == "--backend" and i + 1 < len(sys.argv):
+            name = sys.argv[i + 1].lower()
+    backends = {
+        "anthropic": AnthropicBackend,
+        "bedrock":   BedrockBackend,
+        "azure":     AzureBackend,
+    }
+    cls = backends.get(name)
+    if cls is None:
+        print(f"Unknown backend: {name!r}. Choose from: {', '.join(backends)}")
+        sys.exit(1)
+    return cls()
+
+BACKEND = _pick_backend()
 
 # ──────────────────────────────────────────────────────────────────────────────
 # CONFIG
@@ -232,7 +251,62 @@ def compile_csv(df_meta: pd.DataFrame) -> None:
 # MAIN
 # ──────────────────────────────────────────────────────────────────────────────
 
+def run_test() -> None:
+    """
+    --test mode: process one video and print results to stdout.
+    Does NOT write to the progress file — completely side-effect-free.
+    """
+    df = pd.read_parquet(PARQUET_FILE)
+    system_prompt = load_system_prompt()
+
+    # Find first row that actually has a transcript
+    test_row = None
+    for _, row in df.iterrows():
+        if (row.get("transcript_text") or "").strip():
+            test_row = row.to_dict()
+            break
+
+    if test_row is None:
+        print("ERROR: No video with a transcript found in the parquet file.")
+        sys.exit(1)
+
+    video_id = test_row["video_id"]
+    title    = test_row.get("title") or "(no title)"
+
+    print("=" * 70)
+    print("TEST MODE — processing 1 video, no files written")
+    print("=" * 70)
+    print(f"Backend:  {BACKEND.__class__.__name__}  model: {BACKEND.model}")
+    print(f"Video:    {video_id}")
+    print(f"Title:    {title}")
+    print(f"Transcript length: {len((test_row.get('transcript_text') or '').strip())} chars")
+    print("-" * 70)
+    print("Calling API...")
+
+    video_id, status, ideas, error_msg = process_video(test_row, system_prompt)
+
+    if status == "error":
+        print(f"\nERROR: {error_msg}")
+        sys.exit(1)
+
+    if status == "skip":
+        print(f"\nSKIPPED: {error_msg}")
+        sys.exit(0)
+
+    print(f"\nExtracted {len(ideas)} idea(s) from: {title}\n")
+    print(json.dumps({"ideas": ideas}, indent=2))
+    print("\n" + "=" * 70)
+    print("API key works. You're ready for a full run:")
+    print("  python extract_from_parquet.py")
+    print("=" * 70)
+
+
 def main() -> None:
+    # ── --test flag: quick single-video check, no side effects ───────────
+    if "--test" in sys.argv:
+        run_test()
+        return
+
     df = pd.read_parquet(PARQUET_FILE)
     system_prompt = load_system_prompt()
 
