@@ -1,0 +1,19 @@
+# Twitter/X handles for quant finance accounts.
+# Used by the Twitter collector (best-effort — no reliable free API exists).
+# Populate this when a viable free scraping method is available,
+# or use mode=import with a manually exported archive.
+
+handles:
+  - quantian1          # Marcos Lopez de Prado
+  - ErnestChan
+  - AndreasCleno
+  - wojtekpienkowski
+  - HumbledTrader
+  - 0xAlpha_
+  - QSAlpha
+  - corey_hoffstein
+  - choffstein
+  - breakingthemark
+  - krisabdelmessih
+  - macrocephalopod
+  - JWM_quant

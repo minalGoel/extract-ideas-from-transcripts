@@ -1,0 +1,43 @@
+feeds:
+  # Quantitative / systematic trading blogs
+  - name: "Quantitativo"
+    url: "https://quantitativo.substack.com/feed"
+
+  - name: "Robot Wealth"
+    url: "https://robotwealth.com/feed/"
+
+  - name: "Alpha Architect"
+    url: "https://alphaarchitect.com/feed/"
+
+  - name: "Moontower Meta"
+    url: "https://moontowermeta.com/feed"
+
+  - name: "Verdad Capital"
+    url: "https://verdadcap.com/feed"
+
+  - name: "HangukQuant"
+    url: "https://hangukquant.substack.com/feed"
+
+  - name: "Harbor Trail"
+    url: "https://harbortrail.substack.com/feed"
+
+  - name: "Flirting with Models (Corey Hoffstein)"
+    url: "https://flirtingwithmodels.com/feed/"
+
+  - name: "The Systematic Investor"
+    url: "https://systematic.substack.com/feed"
+
+  - name: "Factor Research (Nicolas Rabener)"
+    url: "https://factorresearch.substack.com/feed"
+
+  - name: "Quantian"
+    url: "https://quantian.substack.com/feed"
+
+  - name: "Portfolio Optimizer"
+    url: "https://portfoliooptimizer.io/blog/feed/"
+
+  - name: "Macro Ops"
+    url: "https://macro-ops.com/feed/"
+
+  - name: "Kris Abdelmessih (Moontower)"
+    url: "https://moontowermeta.com/feed/"

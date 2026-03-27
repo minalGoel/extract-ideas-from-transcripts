@@ -1,0 +1,21 @@
+subreddits:
+  # Core quant / algo
+  - quant
+  - algotrading
+  - systematictrading
+  - QuantFinance
+
+  # Derivatives & options
+  - options
+  - thetagang
+  - Daytrading
+
+  # ML applied to finance
+  # (collect broadly — filter at extraction stage for finance relevance)
+  - MachineLearning
+
+  # Indian markets
+  - IndianStreetBets
+  - IndianStockMarket
+  - NSEIndia
+  - IndiaInvestments

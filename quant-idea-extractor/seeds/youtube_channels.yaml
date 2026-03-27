@@ -1,0 +1,39 @@
+channels:
+  - name: "QuantPy"
+    url: "https://www.youtube.com/@QuantPy/videos"
+
+  - name: "Coding Jesus"
+    url: "https://www.youtube.com/@CodingJesus/videos"
+
+  - name: "Part Time Larry"
+    url: "https://www.youtube.com/@parttimelarry/videos"
+
+  - name: "Algo Trading with Kevin Davey"
+    url: "https://www.youtube.com/@StrategyQuant/videos"
+
+  - name: "Chat With Traders"
+    url: "https://www.youtube.com/@ChatWithTraders/videos"
+
+  - name: "Top Traders Unplugged"
+    url: "https://www.youtube.com/@TopTradersUnplugged/videos"
+
+  - name: "Flirting with Models (Resolve Asset Management)"
+    url: "https://www.youtube.com/@FlirtingwithModels/videos"
+
+  - name: "The Quant Science"
+    url: "https://www.youtube.com/@TheQuantScience/videos"
+
+  - name: "Algorithmic Advantage"
+    url: "https://www.youtube.com/@AlgorithmicAdvantage/videos"
+
+  - name: "Quantopian (archived)"
+    url: "https://www.youtube.com/@Quantopian/videos"
+
+  - name: "QuantConnect"
+    url: "https://www.youtube.com/@QuantConnect/videos"
+
+  - name: "Ernie Chan"
+    url: "https://www.youtube.com/@erpchan/videos"
+
+  - name: "Andreas Clenow"
+    url: "https://www.youtube.com/@AndreasClenow/videos"

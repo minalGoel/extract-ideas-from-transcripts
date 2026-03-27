@@ -1,0 +1,36 @@
+collection:
+  youtube:
+    max_videos_per_channel: 100
+    min_duration_seconds: 180
+
+  reddit:
+    min_score: 10
+    time_filter: "year"        # top posts from last year (praw: "all"|"year"|"month"|"week"|"day"|"hour")
+    max_comments_per_post: 10
+
+  arxiv:
+    max_papers_per_category: 500
+    years_back: 3
+
+  ssrn:
+    request_delay_seconds: 3
+    max_results_per_keyword: 100
+
+  substack:
+    max_posts_per_feed: 50
+
+extraction:
+  model: "claude-sonnet-4-0"   # claude-sonnet-4-20250514 — cost-efficient for bulk
+  max_concurrent_calls: 5
+  max_input_chars: 15000
+  max_cost_per_run: 10.0       # USD hard cap per extraction run
+
+dedup:
+  similarity_threshold: 0.6    # cosine similarity threshold for clustering
+  min_cluster_size: 2
+
+database:
+  path: "data/quant_ideas.db"
+
+logging:
+  level: "INFO"

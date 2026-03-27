@@ -1,0 +1,16 @@
+categories:
+  # Quantitative Finance
+  - q-fin.TR   # Trading and Market Microstructure
+  - q-fin.ST   # Statistical Finance
+  - q-fin.PM   # Portfolio Management
+  - q-fin.CP   # Computational Finance
+  - q-fin.RM   # Risk Management
+  - q-fin.MF   # Mathematical Finance
+  - q-fin.GN   # General Finance
+
+  # Statistics / ML with finance cross-listings
+  # Note: arxiv collector queries by primary category; cross-listed papers
+  # with q-fin are captured via the q-fin.* queries above.
+  # Add cs.LG separately to catch applied ML papers not cross-listed:
+  # (reduce max_papers_per_category for this one to avoid noise)
+  # - cs.LG
