@@ -36,6 +36,7 @@ from __future__ import annotations
 import csv
 import json
 import os
+import random
 import re
 import sys
 import time
@@ -122,12 +123,15 @@ def load_done_ids() -> set[str]:
     return done
 
 
-def append_progress(video_id: str, status: str, ideas: list, error_msg: str = "") -> None:
-    """Append one result line to the progress file (atomic-enough for our use)."""
+def append_progress(video_id: str, status: str, result: dict | None, error_msg: str = "") -> None:
+    """Append one result line to the progress file (atomic-enough for our use).
+
+    `result` is the full parsed JSON from the API — stored as-is, no typecasting.
+    """
     record = {
         "video_id":  video_id,
         "status":    status,       # "ok" | "error" | "skip"
-        "ideas":     ideas,
+        "result":    result,       # full API response dict, or None
         "error_msg": error_msg,
         "ts":        datetime.now(timezone.utc).isoformat(),
     }
@@ -139,26 +143,27 @@ def append_progress(video_id: str, status: str, ideas: list, error_msg: str = ""
 # PARSING
 # ──────────────────────────────────────────────────────────────────────────────
 
-def parse_ideas(raw: str) -> list[dict]:
+def parse_response(raw: str) -> dict | None:
+    """Extract the full JSON object from the API response, as-is."""
     cleaned = re.sub(r"```(?:json)?\s*", "", raw)
     cleaned = re.sub(r"```", "", cleaned).strip()
     m = re.search(r"\{.*\}", cleaned, re.DOTALL)
     if not m:
-        return []
+        return None
     try:
-        data = json.loads(m.group())
-        return [i for i in data.get("ideas", []) if isinstance(i, dict)]
+        return json.loads(m.group())
     except json.JSONDecodeError:
-        return []
+        return None
 
 
 # ──────────────────────────────────────────────────────────────────────────────
 # PER-VIDEO PROCESSING
 # ──────────────────────────────────────────────────────────────────────────────
 
-def process_video(row: dict, system_prompt: str) -> tuple[str, str, list, str]:
+def process_video(row: dict, system_prompt: str) -> tuple[str, str, dict | None, str]:
     """
-    Call the LLM for one video. Returns (video_id, status, ideas, error_msg).
+    Call the LLM for one video. Returns (video_id, status, result_dict, error_msg).
+    `result_dict` is the full parsed JSON from the API — stored as-is.
     Retries up to 3 times on transient errors with exponential back-off.
     """
     video_id   = row["video_id"]
@@ -166,38 +171,46 @@ def process_video(row: dict, system_prompt: str) -> tuple[str, str, list, str]:
     transcript = (row.get("transcript_text") or "").strip()
 
     if not transcript:
-        return video_id, "skip", [], "no transcript"
+        return video_id, "skip", None, "no transcript"
 
     transcript = transcript[:MAX_TRANSCRIPT]
-    user_msg   = f"Title: {title}\n\n---\n\n{transcript}"
+    user_msg   = f"""\
+                Video: {title}
+                video_id: {video_id}
+
+                {transcript}"""
 
     last_err = ""
     for attempt in range(3):
         try:
-            raw     = BACKEND.complete(system_prompt, user_msg)
-            ideas   = parse_ideas(raw)
-            return video_id, "ok", ideas, ""
+            raw    = BACKEND.complete(system_prompt, user_msg)
+            result = parse_response(raw)
+            if result is None:
+                raise ValueError("Could not parse JSON from API response")
+            return video_id, "ok", result, ""
         except Exception as exc:
             last_err = str(exc)
             wait = 2 ** attempt * 5   # 5s, 10s, 20s
             print(f"  [{video_id}] attempt {attempt+1} failed: {exc} — retrying in {wait}s")
             time.sleep(wait)
 
-    return video_id, "error", [], last_err
+    return video_id, "error", None, last_err
 
 
 # ──────────────────────────────────────────────────────────────────────────────
 # FINAL CSV COMPILATION
 # ──────────────────────────────────────────────────────────────────────────────
 
-IDEA_FIELDS = [
-    "idea_type", "name", "description", "mechanism", "data_requirements",
-    "testability", "asset_class", "geographic_relevance", "time_horizon",
-    "novelty_assessment", "confidence", "source_quote", "tags",
+CLAIM_FIELDS = [
+    "cat", "what", "why", "needs", "anchor",
+    "asset", "market", "freq", "entities", "numbers", "india",
 ]
 
+# Top-level fields from the API response (per-video, not per-claim)
+TOP_LEVEL_FIELDS = ["quality", "theme", "gap"]
+
 def compile_csv(df_meta: pd.DataFrame) -> None:
-    """Read progress file and write flat CSV (one row per idea)."""
+    """Read progress file and write flat CSV (one row per claim)."""
     meta = df_meta.set_index("video_id")[
         ["title", "channel_name", "video_url", "upload_date"]
     ].to_dict("index")
@@ -211,34 +224,46 @@ def compile_csv(df_meta: pd.DataFrame) -> None:
             record = json.loads(line)
             if record["status"] != "ok":
                 continue
-            vid = record["video_id"]
-            m   = meta.get(vid, {})
-            for idea in record["ideas"]:
+            vid    = record["video_id"]
+            result = record.get("result") or {}
+            m      = meta.get(vid, {})
+
+            # Speaker info
+            speaker = result.get("speaker") or {}
+
+            for claim in result.get("claims", []):
                 row = {
-                    "video_id":    vid,
-                    "title":       m.get("title", ""),
-                    "channel":     m.get("channel_name", ""),
-                    "video_url":   m.get("video_url", ""),
-                    "upload_date": m.get("upload_date", ""),
+                    "video_id":            vid,
+                    "title":               m.get("title", ""),
+                    "channel":             m.get("channel_name", ""),
+                    "video_url":           m.get("video_url", ""),
+                    "upload_date":         m.get("upload_date", ""),
+                    "speaker_name":        speaker.get("name", ""),
+                    "speaker_affiliation": speaker.get("affiliation", ""),
+                    "speaker_type":        speaker.get("type", ""),
                 }
-                for field in IDEA_FIELDS:
-                    val = idea.get(field, "")
+                for field in TOP_LEVEL_FIELDS:
+                    row[field] = result.get(field, "")
+                for field in CLAIM_FIELDS:
+                    val = claim.get(field, "")
                     row[field] = json.dumps(val) if isinstance(val, list) else val
                 rows.append(row)
 
     if not rows:
-        print("No ideas to export.")
+        print("No claims to export.")
         return
 
     fieldnames = (
-        ["video_id", "title", "channel", "video_url", "upload_date"] + IDEA_FIELDS
+        ["video_id", "title", "channel", "video_url", "upload_date",
+         "speaker_name", "speaker_affiliation", "speaker_type"]
+        + TOP_LEVEL_FIELDS + CLAIM_FIELDS
     )
     with open(OUTPUT_CSV, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(rows)
 
-    print(f"\nWrote {len(rows)} ideas across {len(set(r['video_id'] for r in rows))} videos → {OUTPUT_CSV}")
+    print(f"\nWrote {len(rows)} claims across {len(set(r['video_id'] for r in rows))} videos → {OUTPUT_CSV}")
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -247,51 +272,58 @@ def compile_csv(df_meta: pd.DataFrame) -> None:
 
 def run_test() -> None:
     """
-    --test mode: process one video and print results to stdout.
+    --test mode: randomly sample 5 videos and process them.
     Does NOT write to the progress file — completely side-effect-free.
     """
     df = pd.read_parquet(PARQUET_FILE)
     system_prompt = load_system_prompt()
 
-    # Find first row that actually has a transcript
-    test_row = None
-    for _, row in df.iterrows():
-        if (row.get("transcript_text") or "").strip():
-            test_row = row.to_dict()
-            break
+    # Filter to rows that actually have a transcript
+    has_transcript = df[df["transcript_text"].fillna("").str.strip().astype(bool)]
 
-    if test_row is None:
+    if has_transcript.empty:
         print("ERROR: No video with a transcript found in the parquet file.")
         sys.exit(1)
 
-    video_id = test_row["video_id"]
-    title    = test_row.get("title") or "(no title)"
+    n_sample = min(5, len(has_transcript))
+    sample   = has_transcript.sample(n=n_sample, random_state=random.randint(0, 2**31))
 
     print("=" * 70)
-    print("TEST MODE — processing 1 video, no files written")
+    print(f"TEST MODE — processing {n_sample} random video(s), no files written")
     print("=" * 70)
-    print(f"Backend:  {BACKEND.__class__.__name__}  model: {BACKEND.model}")
-    print(f"Video:    {video_id}")
-    print(f"Title:    {title}")
-    print(f"Transcript length: {len((test_row.get('transcript_text') or '').strip())} chars")
-    print("-" * 70)
-    print("Calling API...")
+    print(f"Backend: {BACKEND.__class__.__name__}  model: {BACKEND.model}\n")
 
-    video_id, status, ideas, error_msg = process_video(test_row, system_prompt)
+    ok = 0
+    for i, (_, row) in enumerate(sample.iterrows(), 1):
+        test_row = row.to_dict()
+        video_id = test_row["video_id"]
+        title    = test_row.get("title") or "(no title)"
+        t_len    = len((test_row.get("transcript_text") or "").strip())
 
-    if status == "error":
-        print(f"\nERROR: {error_msg}")
-        sys.exit(1)
+        print(f"[{i}/{n_sample}] {video_id}  {title}")
+        print(f"  Transcript: {t_len} chars")
+        print(f"  Calling API...")
 
-    if status == "skip":
-        print(f"\nSKIPPED: {error_msg}")
-        sys.exit(0)
+        video_id, status, result, error_msg = process_video(test_row, system_prompt)
 
-    print(f"\nExtracted {len(ideas)} idea(s) from: {title}\n")
-    print(json.dumps({"ideas": ideas}, indent=2))
-    print("\n" + "=" * 70)
-    print("API key works. You're ready for a full run:")
-    print("  python extract_from_parquet.py")
+        if status == "error":
+            print(f"  ERROR: {error_msg}\n")
+            continue
+        if status == "skip":
+            print(f"  SKIPPED: {error_msg}\n")
+            continue
+
+        n_claims = len((result or {}).get("claims", []))
+        print(f"  Extracted {n_claims} claim(s)")
+        print(json.dumps(result, indent=2))
+        print()
+        ok += 1
+
+    print("=" * 70)
+    print(f"Done: {ok}/{n_sample} succeeded.")
+    if ok > 0:
+        print("API key works. You're ready for a full run:")
+        print("  python extract_from_parquet.py")
     print("=" * 70)
 
 
@@ -337,25 +369,25 @@ def main() -> None:
         for future in as_completed(futures):
             vid_id = futures[future]
             try:
-                video_id, status, ideas, error_msg = future.result()
+                video_id, status, result, error_msg = future.result()
             except Exception as exc:
                 # Unexpected — shouldn't happen since process_video catches errors
-                append_progress(vid_id, "error", [], str(exc))
+                append_progress(vid_id, "error", None, str(exc))
                 errors += 1
                 continue
 
-            append_progress(video_id, status, ideas, error_msg)
+            append_progress(video_id, status, result, error_msg)
 
             if status == "ok":
                 completed  += 1
-                n_ideas     = len(ideas)
-                total_ideas += n_ideas
+                n_claims    = len((result or {}).get("claims", []))
+                total_ideas += n_claims
                 # Rough cost estimate (chars / 4 ≈ tokens)
                 transcript_chars = len(
                     next((r["transcript_text"] or "" for r in pending if r["video_id"] == video_id), "")
                 )
                 est_cost += (transcript_chars / 4) * _PRICE_IN + 1000 * _PRICE_OUT
-                print(f"  ✓ {video_id}: {n_ideas} ideas  "
+                print(f"  ✓ {video_id}: {n_claims} claims  "
                       f"(done {completed}/{n_pending}, est cost ${est_cost:.3f})")
 
                 if est_cost >= MAX_COST_USD:
@@ -370,7 +402,7 @@ def main() -> None:
                 print(f"  ✗ {video_id}: {error_msg}")
 
     print(f"\nDone. {completed} processed, {skipped} skipped, {errors} errors")
-    print(f"Total ideas extracted this run: {total_ideas}")
+    print(f"Total claims extracted this run: {total_ideas}")
     compile_csv(df)
 
 
