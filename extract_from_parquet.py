@@ -98,15 +98,9 @@ def load_system_prompt() -> str:
     if PROMPT_FILE.exists():
         return PROMPT_FILE.read_text(encoding="utf-8").strip()
     # Minimal fallback if prompt file is missing
-    return (
-        "You are a quantitative trading research analyst. "
-        "Extract all quantitative trading ideas from the transcript and return "
-        "a JSON object with an 'ideas' array. Each idea must have: "
-        "idea_type, name, description, mechanism, data_requirements, "
-        "testability, asset_class, geographic_relevance, time_horizon, "
-        "novelty_assessment, confidence, source_quote, tags."
+    raise FileNotFoundError(
+        f"System prompt file not found: {PROMPT_FILE}. Please create the file at this path."
     )
-
 
 # ──────────────────────────────────────────────────────────────────────────────
 # IDEMPOTENCY — progress file read/write
