@@ -1,0 +1,507 @@
+{
+  "input_claims": 27447,
+  "pass1_dedup_threshold": 0.75,
+  "pass1_unique_ideas": 21281,
+  "pass1_dedup_ratio": 0.225,
+  "model": "sentence-transformers/all-mpnet-base-v2",
+  "device": "mps",
+  "pass2_topic_threshold": 0.55,
+  "pass2_num_topics": 5122,
+  "pass2_consolidation_ratio": 0.759,
+  "top_topics": [
+    {
+      "topic_id": 1,
+      "representative": "The speakers argue trend following is a divergent strategy that profits by cutting losers and following winners across markets.",
+      "num_ideas": 158,
+      "num_claims": 500,
+      "num_speakers": 155,
+      "categories": [
+        "STRATEGY",
+        "RISK",
+        "MICROSTRUCTURE",
+        "MARKET_STRUCTURE",
+        "ALT_DATA"
+      ]
+    },
+    {
+      "topic_id": 2,
+      "representative": "They think the Fed can cut 50 to 100 basis points over six to nine months if growth softens and recession risk rises.",
+      "num_ideas": 95,
+      "num_claims": 159,
+      "num_speakers": 85,
+      "categories": [
+        "STRATEGY",
+        "MARKET_STRUCTURE",
+        "MACRO",
+        "RISK"
+      ]
+    },
+    {
+      "topic_id": 3,
+      "representative": "He argues trend-following underperforms stocks partly because CTAs lack stock-only funds or meaningful equity exposure.",
+      "num_ideas": 93,
+      "num_claims": 152,
+      "num_speakers": 81,
+      "categories": [
+        "STRATEGY",
+        "MARKET_STRUCTURE",
+        "ALT_DATA",
+        "RISK"
+      ]
+    },
+    {
+      "topic_id": 4,
+      "representative": "He argues stocks and bonds can correlate in stress, as seen in 2022, so permanent 60/40-style allocation can drag performance.",
+      "num_ideas": 81,
+      "num_claims": 137,
+      "num_speakers": 80,
+      "categories": [
+        "STRATEGY",
+        "MARKET_STRUCTURE",
+        "ALT_DATA",
+        "RISK"
+      ]
+    },
+    {
+      "topic_id": 5,
+      "representative": "He claims diversification is the only free lunch, but the marginal benefit drops quickly; with pairwise correlation 0.5, 7\u20138 strategies nearly reaches the asymptote.",
+      "num_ideas": 60,
+      "num_claims": 107,
+      "num_speakers": 73,
+      "categories": [
+        "STRATEGY",
+        "RISK",
+        "MICROSTRUCTURE",
+        "MARKET_STRUCTURE",
+        "ALT_DATA"
+      ]
+    },
+    {
+      "topic_id": 6,
+      "representative": "He says one purely systematic trader evolved from trend following to countertrend and then to mixed models as markets changed.",
+      "num_ideas": 84,
+      "num_claims": 133,
+      "num_speakers": 72,
+      "categories": [
+        "MICROSTRUCTURE",
+        "STRATEGY",
+        "MARKET_STRUCTURE",
+        "RISK"
+      ]
+    },
+    {
+      "topic_id": 7,
+      "representative": "The strategy had only positive years since 2014 and 64% positive months, but its worst month was -14.5% in February 2020.",
+      "num_ideas": 78,
+      "num_claims": 103,
+      "num_speakers": 71,
+      "categories": [
+        "STRATEGY",
+        "MARKET_STRUCTURE",
+        "RISK"
+      ]
+    },
+    {
+      "topic_id": 8,
+      "representative": "Momentum was applied to the aggregate U.S. market, trading only the direction of market momentum rather than stock deciles.",
+      "num_ideas": 79,
+      "num_claims": 170,
+      "num_speakers": 68,
+      "categories": [
+        "STRATEGY",
+        "MARKET_STRUCTURE",
+        "TOOL",
+        "RISK"
+      ]
+    },
+    {
+      "topic_id": 9,
+      "representative": "Binder argues the channel is expectations: mere fear that the central bank may cave raises inflation expectations now.",
+      "num_ideas": 63,
+      "num_claims": 98,
+      "num_speakers": 62,
+      "categories": [
+        "STRATEGY",
+        "MARKET_STRUCTURE",
+        "MACRO",
+        "RISK"
+      ]
+    },
+    {
+      "topic_id": 10,
+      "representative": "Price-range compression across markets reduced trend-following opportunities by shrinking available trend size over rolling three- and six-month windows.",
+      "num_ideas": 67,
+      "num_claims": 103,
+      "num_speakers": 61,
+      "categories": [
+        "STRATEGY",
+        "MARKET_STRUCTURE",
+        "RISK"
+      ]
+    },
+    {
+      "topic_id": 11,
+      "representative": "He believes the AI winners today are chip sellers, firms with data, and connected infrastructure providers, while software beneficiaries remain unclear.",
+      "num_ideas": 61,
+      "num_claims": 113,
+      "num_speakers": 60,
+      "categories": [
+        "STRATEGY",
+        "RISK",
+        "MARKET_STRUCTURE",
+        "TOOL",
+        "MACRO",
+        "ALT_DATA"
+      ]
+    },
+    {
+      "topic_id": 12,
+      "representative": "If markets have different Sharpe ratios, it can be optimal to abandon low-Sharpe markets even if they add diversification.",
+      "num_ideas": 54,
+      "num_claims": 94,
+      "num_speakers": 57,
+      "categories": [
+        "STRATEGY",
+        "RISK"
+      ]
+    },
+    {
+      "topic_id": 13,
+      "representative": "In March 2020, Treasury liquidity became far worse than volatility alone would predict, showing the market could not intermediate extreme liquidity demands.",
+      "num_ideas": 47,
+      "num_claims": 67,
+      "num_speakers": 55,
+      "categories": [
+        "STRATEGY",
+        "MARKET_STRUCTURE",
+        "RISK"
+      ]
+    },
+    {
+      "topic_id": 14,
+      "representative": "The trade encourages poor habits because it wins about 90% of the time and tempts traders to add size into losses.",
+      "num_ideas": 78,
+      "num_claims": 116,
+      "num_speakers": 53,
+      "categories": [
+        "STRATEGY",
+        "RISK"
+      ]
+    },
+    {
+      "topic_id": 15,
+      "representative": "Managed futures are framed as a long-cycle diversifier: not a hedge every day, but a portfolio balancer across several market cycles.",
+      "num_ideas": 54,
+      "num_claims": 92,
+      "num_speakers": 52,
+      "categories": [
+        "STRATEGY",
+        "RISK",
+        "MARKET_STRUCTURE",
+        "TOOL",
+        "ALT_DATA"
+      ]
+    },
+    {
+      "topic_id": 16,
+      "representative": "Gold and some precious metals were bright spots, and energies also provided crisis offset for trend-followers.",
+      "num_ideas": 71,
+      "num_claims": 166,
+      "num_speakers": 51,
+      "categories": [
+        "STRATEGY",
+        "MARKET_STRUCTURE",
+        "ALT_DATA",
+        "RISK"
+      ]
+    },
+    {
+      "topic_id": 17,
+      "representative": "He said the Fed\u2019s extended QT runway matters because the stock of Fed holdings affects yield levels and helps keep long rates higher.",
+      "num_ideas": 53,
+      "num_claims": 73,
+      "num_speakers": 51,
+      "categories": [
+        "STRATEGY",
+        "RISK",
+        "MICROSTRUCTURE",
+        "MARKET_STRUCTURE",
+        "MACRO"
+      ]
+    },
+    {
+      "topic_id": 18,
+      "representative": "He argues successful quant methods start from a well-understood trading edge and are then systematized, not discovered by raw data mining.",
+      "num_ideas": 58,
+      "num_claims": 84,
+      "num_speakers": 49,
+      "categories": [
+        "STRATEGY",
+        "RISK",
+        "MARKET_STRUCTURE",
+        "TOOL",
+        "ALT_DATA"
+      ]
+    },
+    {
+      "topic_id": 19,
+      "representative": "Goldilocks soft landing is statistically rare; he cites 12 tightening cycles, eight recessions, and only four arguable soft landings since the 1960s.",
+      "num_ideas": 52,
+      "num_claims": 70,
+      "num_speakers": 49,
+      "categories": [
+        "STRATEGY",
+        "RISK",
+        "MARKET_STRUCTURE",
+        "MACRO",
+        "ALT_DATA"
+      ]
+    },
+    {
+      "topic_id": 20,
+      "representative": "The paper claims 87.5% of trades use exactly one lot when the spread is not constrained by one tick.",
+      "num_ideas": 58,
+      "num_claims": 91,
+      "num_speakers": 46,
+      "categories": [
+        "MICROSTRUCTURE",
+        "STRATEGY",
+        "MARKET_STRUCTURE"
+      ]
+    },
+    {
+      "topic_id": 21,
+      "representative": "Post-crisis regulation made single-manager hedge funds harder to launch because operational, reporting, and risk burdens rose sharply.",
+      "num_ideas": 44,
+      "num_claims": 72,
+      "num_speakers": 43,
+      "categories": [
+        "STRATEGY",
+        "MARKET_STRUCTURE",
+        "ALT_DATA",
+        "RISK"
+      ]
+    },
+    {
+      "topic_id": 22,
+      "representative": "Across minutes to decades, markets show different regimes: intraday mean reversion, 3-12 month trend persistence, and multi-year reversion or persistence flips.",
+      "num_ideas": 37,
+      "num_claims": 59,
+      "num_speakers": 43,
+      "categories": [
+        "MICROSTRUCTURE",
+        "STRATEGY",
+        "RISK"
+      ]
+    },
+    {
+      "topic_id": 23,
+      "representative": "New value stocks are younger firms with strong ROE, strong ROA, and high sales growth that became value after a stock-price drop.",
+      "num_ideas": 58,
+      "num_claims": 102,
+      "num_speakers": 42,
+      "categories": [
+        "STRATEGY",
+        "MARKET_STRUCTURE",
+        "RISK"
+      ]
+    },
+    {
+      "topic_id": 24,
+      "representative": "Dever says the main advantage of systematic trading is disciplined risk management, preventing rationalized holding of losing positions.",
+      "num_ideas": 39,
+      "num_claims": 67,
+      "num_speakers": 42,
+      "categories": [
+        "STRATEGY",
+        "MARKET_STRUCTURE",
+        "TOOL",
+        "RISK"
+      ]
+    },
+    {
+      "topic_id": 25,
+      "representative": "Credit stress is turning, with default rates, bankruptcies, and delinquency rates on consumer debt all rising.",
+      "num_ideas": 39,
+      "num_claims": 58,
+      "num_speakers": 42,
+      "categories": [
+        "STRATEGY",
+        "MARKET_STRUCTURE",
+        "MACRO",
+        "RISK"
+      ]
+    },
+    {
+      "topic_id": 26,
+      "representative": "A 52% maximum drawdown is a major red flag because recovery from losing half the capital is very hard.",
+      "num_ideas": 51,
+      "num_claims": 74,
+      "num_speakers": 41,
+      "categories": [
+        "STRATEGY",
+        "MARKET_STRUCTURE",
+        "RISK"
+      ]
+    },
+    {
+      "topic_id": 27,
+      "representative": "The unemployment rate has risen 60 bps from its low and is increasing about 30 bps every five months.",
+      "num_ideas": 41,
+      "num_claims": 66,
+      "num_speakers": 39,
+      "categories": [
+        "STRATEGY",
+        "MARKET_STRUCTURE",
+        "MACRO",
+        "RISK"
+      ]
+    },
+    {
+      "topic_id": 28,
+      "representative": "A long/short portfolio buying positive-news names and shorting negative-news names can outperform before costs, but costs materially reduce the edge.",
+      "num_ideas": 37,
+      "num_claims": 59,
+      "num_speakers": 39,
+      "categories": [
+        "STRATEGY",
+        "MARKET_STRUCTURE",
+        "RISK"
+      ]
+    },
+    {
+      "topic_id": 29,
+      "representative": "He learned that buying options on every name in an early long basket reduced gap risk but became so expensive that the portfolio stopped making money.",
+      "num_ideas": 45,
+      "num_claims": 58,
+      "num_speakers": 37,
+      "categories": [
+        "STRATEGY",
+        "MARKET_STRUCTURE",
+        "RISK"
+      ]
+    },
+    {
+      "topic_id": 30,
+      "representative": "Post-2009 funded long-vol funds relied mainly on implied-vol expansion and convexity from downside equity selloffs because that was the only meaningful tool available.",
+      "num_ideas": 40,
+      "num_claims": 56,
+      "num_speakers": 37,
+      "categories": [
+        "MICROSTRUCTURE",
+        "STRATEGY",
+        "MARKET_STRUCTURE",
+        "RISK"
+      ]
+    }
+  ],
+  "largest_dedup_clusters": [
+    {
+      "what": "The speakers argue trend following is a divergent strategy that profits by cutting losers and following winners across markets.",
+      "size": 52,
+      "cat": "STRATEGY"
+    },
+    {
+      "what": "He says trend is also predictive across time, so stronger trending regimes justify larger trend allocations than quiet regimes.",
+      "size": 42,
+      "cat": "STRATEGY"
+    },
+    {
+      "what": "A chapter-one table shows a 50/50 trend-following equities and bonds mix over 800 years with low correlation and diversification benefits.",
+      "size": 26,
+      "cat": "STRATEGY"
+    },
+    {
+      "what": "Momentum was applied to the aggregate U.S. market, trading only the direction of market momentum rather than stock deciles.",
+      "size": 24,
+      "cat": "STRATEGY"
+    },
+    {
+      "what": "Momentum works across stocks, indices, sectors, bonds, commodities, and currencies, with evidence extending back to the 1800s.",
+      "size": 22,
+      "cat": "STRATEGY"
+    },
+    {
+      "what": "Ryan frames trend-following as momentum long-short across assets that can profit during dislocations, including inflation surprises and stagflation.",
+      "size": 14,
+      "cat": "STRATEGY"
+    },
+    {
+      "what": "Managed futures are framed as a long-cycle diversifier: not a hedge every day, but a portfolio balancer across several market cycles.",
+      "size": 14,
+      "cat": "STRATEGY"
+    },
+    {
+      "what": "He claims diversification is the only free lunch, but the marginal benefit drops quickly; with pairwise correlation 0.5, 7\u20138 strategies nearly reaches the asymptote.",
+      "size": 13,
+      "cat": "STRATEGY"
+    },
+    {
+      "what": "He says Adani\u2019s growth has been funded largely by debt, because the family wants control and avoids equity dilution.",
+      "size": 13,
+      "cat": "RISK"
+    },
+    {
+      "what": "November was a broad give-back month for trend followers, with reversals across currencies, fixed income, and commodities rather than one isolated market.",
+      "size": 12,
+      "cat": "STRATEGY"
+    },
+    {
+      "what": "He argues successful quant methods start from a well-understood trading edge and are then systematized, not discovered by raw data mining.",
+      "size": 12,
+      "cat": "STRATEGY"
+    },
+    {
+      "what": "His trend portfolio was up 4% for the week, 9.63% for the month, and 7.8% for the year, driven mainly by group-two models.",
+      "size": 12,
+      "cat": "STRATEGY"
+    },
+    {
+      "what": "Short-horizon Trend signals of six months or less struggled badly in fixed income, while ten-month-and-longer signals did better.",
+      "size": 11,
+      "cat": "STRATEGY"
+    },
+    {
+      "what": "He notes HDFC Bank has returned only 57% over five years and is about 25% below its peak, which he sees as a margin of safety.",
+      "size": 11,
+      "cat": "STRATEGY"
+    },
+    {
+      "what": "Q1 2025 leveraged bank loan volume was $140 billion, up 15%, with 75% refinancing, 10% M&A, and 27% of total leverage loan volume.",
+      "size": 11,
+      "cat": "MARKET_STRUCTURE"
+    },
+    {
+      "what": "Build a portfolio from durable managed futures trend following, market-cap global equities, and laddered Treasury bills to target a smoother long-term equity curve.",
+      "size": 10,
+      "cat": "STRATEGY"
+    },
+    {
+      "what": "Dever says the main advantage of systematic trading is disciplined risk management, preventing rationalized holding of losing positions.",
+      "size": 10,
+      "cat": "RISK"
+    },
+    {
+      "what": "Trend-following adds systematic downside control versus buy-and-hold by actively managing risk and cutting drawdowns instead of passively absorbing market beta.",
+      "size": 10,
+      "cat": "RISK"
+    },
+    {
+      "what": "Algorithmic trading is framed as automation of strategy development and implementation using statistical and mathematical inputs.",
+      "size": 10,
+      "cat": "STRATEGY"
+    },
+    {
+      "what": "He argues trend-following underperforms stocks partly because CTAs lack stock-only funds or meaningful equity exposure.",
+      "size": 10,
+      "cat": "STRATEGY"
+    }
+  ],
+  "timing": {
+    "model_load_s": 5.4,
+    "embedding_s": 174.3,
+    "pass1_s": 22.2,
+    "pass2_s": 44.9,
+    "total_s": 247.7
+  }
+}
