@@ -1,0 +1,650 @@
+#!/Users/minalgoel/Coding_Projects/extract-ideas-from-transcripts/.venv/bin/python3
+"""
+Local YouTube link -> transcript text UI.
+
+Features
+--------
+- Accepts either a single YouTube video URL or a YouTube playlist URL.
+- Fetches transcripts using the repo's youtube_fetch_transcripts.py logic
+  (youtube-transcript-api, including the same retry/backoff behavior).
+- For playlists, renders multiple transcript text boxes.
+- Bulk actions:
+  - Copy all transcripts as one block
+  - Download all transcripts as CSV
+- Per-item actions:
+  - Copy transcript for a single video
+
+Run
+---
+  python youtube_transcript_ui.py
+  open http://localhost:7860
+
+Notes
+-----
+- This is a quick local UI; it fetches transcripts synchronously per request.
+- If you want to avoid rate-limits, place youtube_cookies.txt at repo root.
+"""
+
+from __future__ import annotations
+
+import os
+import sys
+
+import argparse
+import csv
+import io
+import json
+import re
+import shutil
+import subprocess
+import time
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+from typing import Any
+from urllib.parse import parse_qs, urlparse
+
+
+REPO_ROOT = Path(__file__).resolve().parent
+
+
+_PLAYLIST_PARAM_RE = re.compile(r"(?:^|[?&])list=([^&]+)", re.IGNORECASE)
+_YOUTUBE_WATCH_RE = re.compile(r"(?:\?|&)v=([^&]+)", re.IGNORECASE)
+
+
+def _extract_video_id(url: str) -> str | None:
+    u = urlparse(url)
+    host = (u.netloc or "").lower()
+    path = (u.path or "").strip("/")
+
+    # youtu.be/<id>
+    if "youtu.be" in host:
+        if path:
+            return path.split("/")[0]
+
+    # youtube.com/watch?v=<id>
+    qs = parse_qs(u.query)
+    if "v" in qs and qs["v"]:
+        return (qs["v"][0] or "").strip() or None
+
+    # youtube.com/shorts/<id> or /live/<id> or /embed/<id>
+    if path:
+        parts = path.split("/")
+        if len(parts) >= 2 and parts[0] in ("shorts", "live", "embed"):
+            return parts[1] or None
+
+    # Fallback: sometimes input contains ?v=... in raw string
+    m = _YOUTUBE_WATCH_RE.search(url)
+    if m:
+        return m.group(1)
+
+    return None
+
+
+def _extract_playlist_id(url: str) -> str | None:
+    u = urlparse(url)
+    qs = parse_qs(u.query)
+    if "list" in qs and qs["list"]:
+        return (qs["list"][0] or "").strip() or None
+
+    m = _PLAYLIST_PARAM_RE.search(url)
+    if m:
+        return (m.group(1) or "").strip() or None
+
+    # Some share links contain /playlist?list=<id> already handled above,
+    # but keep a fallback for path-based playlist URLs.
+    path = (u.path or "").strip("/")
+    # Example: youtube.com/playlist/<id> is not standard, but try it.
+    if path.startswith("playlist/"):
+        parts = path.split("/")
+        if len(parts) >= 2:
+            return parts[1] or None
+
+    return None
+
+
+def _is_playlist_url(url: str) -> bool:
+    u = urlparse(url)
+    if "playlist" in (u.path or "").lower():
+        return True
+    qs = parse_qs(u.query)
+    if "list" in qs:
+        return True
+    return _extract_playlist_id(url) is not None
+
+
+def _yt_dlp_bin() -> str:
+    ytdlp = shutil.which("yt-dlp")
+    if ytdlp:
+        return ytdlp
+    # Try repo-local virtualenv locations used by this repo.
+    candidates = [
+        REPO_ROOT / ".venv" / "bin" / "yt-dlp",
+        REPO_ROOT / "venv" / "bin" / "yt-dlp",
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return str(candidate)
+    raise RuntimeError(
+        "yt-dlp not found. Install with: pip install -r requirements.txt"
+    )
+
+
+def _list_playlist_videos(
+    playlist_url: str, max_videos: int | None
+) -> list[dict[str, str]]:
+    """
+    Return a list of {video_id, title} for playlist entries.
+    Uses yt-dlp `--flat-playlist` JSON printing.
+    """
+
+    cmd: list[str] = [
+        _yt_dlp_bin(),
+        "--flat-playlist",
+        "--print-json",
+        "--no-warnings",
+        "--quiet",
+    ]
+    if max_videos is not None and max_videos > 0:
+        # yt-dlp's --playlist-end expects an index (1-based). We use max_videos
+        # as the inclusive end index to keep "first N" behavior.
+        cmd += ["--playlist-end", str(max_videos)]
+    cmd += [playlist_url]
+
+    result = subprocess.run(
+        cmd, capture_output=True, text=True, timeout=300
+    )
+    if result.returncode != 0:
+        stderr = (result.stderr or "").strip()
+        raise RuntimeError(f"yt-dlp failed listing playlist: {stderr[:300]}")
+
+    entries: list[dict[str, str]] = []
+    for line in result.stdout.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            data = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+
+        vid = (data.get("id") or "").strip()
+        if not vid:
+            continue
+        title = (data.get("title") or "").strip()
+        entries.append({"video_id": vid, "title": title})
+
+    # yt-dlp should already respect --playlist-end, but keep safety.
+    if max_videos is not None and max_videos > 0:
+        entries = entries[:max_videos]
+    return entries
+
+
+def _fetch_transcript(video_id: str, languages: list[str]) -> dict[str, Any]:
+    """
+    Reuse the repo's youtube-transcript-api fetching logic.
+    """
+    from youtube_fetch_transcripts import _ENGLISH_LANGS, _fetch_transcript_sync
+
+    # If the user asks for languages, pass them through. The existing script's
+    # English-first list is a good default; keep it unless the user overrides.
+    lang_list = languages if languages else _ENGLISH_LANGS
+
+    cookies_path = REPO_ROOT / "youtube_cookies.txt"
+    cookies_file = str(cookies_path) if cookies_path.exists() else None
+
+    result = _fetch_transcript_sync(
+        video_id=video_id,
+        languages=lang_list,
+        cookies_from_browser=None,
+        max_429_retries=6,
+        backoff_base_seconds=30.0,
+        backoff_max_seconds=15 * 60.0,
+        cookies_file=cookies_file,
+    )
+    if result.get("transcript_text"):
+        result["transcript_text"] = _sanitize_transcript(result["transcript_text"])
+    return result
+
+
+def _sanitize_transcript(text: str) -> str:
+    # Replace non-breaking spaces and other Unicode whitespace with regular space
+    text = text.replace("\xa0", " ").replace("\u200b", "").replace("\ufeff", "")
+    # Collapse multiple spaces/tabs into one
+    text = re.sub(r"[ \t]+", " ", text)
+    # Clean up lines individually
+    lines = [line.strip() for line in text.splitlines()]
+    # Remove blank lines and rejoin as clean paragraphs
+    text = " ".join(line for line in lines if line)
+    return text.strip()
+
+
+def _get_video_title(video_id: str) -> str:
+    """
+    Best-effort title extraction using `yt-dlp`.
+    """
+    cmd = [
+        _yt_dlp_bin(),
+        "--skip-download",
+        "--no-warnings",
+        "--quiet",
+        "--print",
+        "%(title)s",
+        f"https://www.youtube.com/watch?v={video_id}",
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+    if result.returncode != 0:
+        return ""
+    return (result.stdout or "").strip()
+
+
+def _make_csv(items: list[dict[str, Any]]) -> str:
+    """
+    CSV includes:
+    - video_id
+    - title
+    - transcript_language
+    - transcript_generated
+    - transcript_error
+    - transcript_text
+    """
+    out = io.StringIO()
+    writer = csv.DictWriter(
+        out,
+        fieldnames=[
+            "video_id",
+            "title",
+            "transcript_language",
+            "transcript_generated",
+            "transcript_error",
+            "transcript_text",
+        ],
+        quoting=csv.QUOTE_ALL,
+        lineterminator="\n",
+    )
+    writer.writeheader()
+    for it in items:
+        writer.writerow(
+            {
+                "video_id": it.get("video_id", ""),
+                "title": it.get("title", ""),
+                "transcript_language": it.get("transcript_language", ""),
+                "transcript_generated": it.get("transcript_generated", ""),
+                "transcript_error": it.get("transcript_error", ""),
+                "transcript_text": it.get("transcript_text", ""),
+            }
+        )
+    return out.getvalue()
+
+
+INDEX_HTML = """<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>YouTube Transcript UI</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial; margin: 20px; }
+      input, textarea, button { font: inherit; }
+      textarea { width: 100%; min-height: 160px; resize: vertical; padding: 10px; box-sizing: border-box; }
+      .row { display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap; }
+      .col { flex: 1 1 320px; min-width: 320px; }
+      .box { border: 1px solid #ddd; border-radius: 10px; padding: 12px; }
+      button { padding: 10px 14px; border-radius: 10px; border: 1px solid #ddd; background: #fff; cursor: pointer; }
+      button.primary { border-color: #333; background: #333; color: #fff; }
+      button:disabled { opacity: 0.6; cursor: not-allowed; }
+      .item { margin-top: 14px; border-top: 1px solid #eee; padding-top: 14px; }
+      .meta { font-size: 12px; color: #555; }
+      .status { font-size: 12px; color: #b00020; white-space: pre-wrap; }
+      .good { color: #0a6b2f; }
+      .actions { margin-top: 8px; display: flex; gap: 10px; flex-wrap: wrap; }
+      .muted { color: #666; }
+    </style>
+  </head>
+  <body>
+    <h2>YouTube Transcript UI</h2>
+    <div class="box">
+      <div class="row">
+        <div class="col">
+          <label><b>YouTube URL</b></label><br/>
+          <input id="url" style="width: 100%;" placeholder="https://www.youtube.com/watch?v=... or https://www.youtube.com/playlist?list=..." />
+          <div class="meta" style="margin-top:6px;">
+            Playlist returns multiple transcript boxes. Videos fetch may take time.
+          </div>
+        </div>
+        <div class="col">
+          <label><b>Max videos (optional)</b></label><br/>
+          <input id="maxVideos" style="width: 100%;" type="number" min="1" step="1" placeholder="e.g. 10" />
+          <div class="meta" style="margin-top:6px;">
+            For a single video, this is ignored.
+          </div>
+        </div>
+      </div>
+
+      <div class="row" style="margin-top: 12px;">
+        <div class="col" style="flex: 0 0 360px;">
+          <label><b>Transcript language(s)</b></label><br/>
+          <input id="languages" style="width: 100%;" placeholder="e.g. en or en hi" />
+          <div class="meta" style="margin-top:6px;">Leave blank to auto-pick English-first.</div>
+        </div>
+        <div class="col" style="flex: 0 0 220px;">
+          <button id="fetchBtn" class="primary">Fetch transcript(s)</button>
+          <div id="busy" class="meta" style="margin-top:8px;"></div>
+        </div>
+      </div>
+    </div>
+
+    <div style="height: 12px;"></div>
+    <div class="box">
+      <div class="actions">
+        <button id="copyAllBtn" disabled>Copy all</button>
+        <button id="downloadCsvBtn" disabled>Download CSV</button>
+      </div>
+      <div id="summary" class="meta" style="margin-top: 10px;"></div>
+      <div id="results"></div>
+    </div>
+
+    <script>
+      const $ = (id) => document.getElementById(id);
+
+      function csvEscape(value) {
+        if (value === null || value === undefined) return '""';
+        const s = String(value).replaceAll('"', '""');
+        return '"' + s + '"';
+      }
+
+      function buildCsv(items) {
+        const header = [
+          'video_id',
+          'title',
+          'transcript_language',
+          'transcript_generated',
+          'transcript_error',
+          'transcript_text'
+        ].join(',');
+
+        const rows = items.map(it => ([
+          it.video_id,
+          it.title,
+          it.transcript_language,
+          it.transcript_generated,
+          it.transcript_error,
+          it.transcript_text
+        ].map(csvEscape).join(',')));
+
+        return [header, ...rows].join('\\n');
+      }
+
+      function downloadText(filename, content) {
+        const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      }
+
+      function copyText(text) {
+        return navigator.clipboard.writeText(text);
+      }
+
+      function formatTranscriptBlock(it) {
+        const videoId = it.video_id || '';
+        const videoTitle = it.title || '';
+        const videoUrl = it.video_url || '';
+        const transcript = (it.transcript_text || '').trim();
+        const err = it.transcript_error ? ('[ERROR] ' + it.transcript_error) : '';
+
+        return (
+          `video_id: ${videoId}\\n` +
+          `video_title: ${videoTitle}\\n` +
+          `video_URL: ${videoUrl}\\n` +
+          `video_transcropt:\\n` +
+          (err ? err + '\\n' : '') +
+          (!err ? transcript : '').trimEnd()
+        );
+      }
+
+      function copyAllText(items) {
+        return items.map(it => formatTranscriptBlock(it)).join('\\n\\n');
+      }
+
+      function makeItemDom(it, idx) {
+        const wrap = document.createElement('div');
+        wrap.className = 'item';
+
+        const title = it.title || it.video_id || '(untitled)';
+        const textareaId = `t_${idx}`;
+
+        wrap.innerHTML = `
+          <div class="meta"><b>${title}</b> <span class="muted">(${it.video_id || ''})</span></div>
+          <div class="meta">${it.transcript_language ? ('Language: ' + it.transcript_language) : ''}</div>
+          ${
+            it.transcript_error
+              ? `<div class="status">Error: ${it.transcript_error}</div>`
+              : `<div class="meta good">OK</div>`
+          }
+          <div class="actions">
+            <button onclick="(window.__copyOne || (()=>{}))('${textareaId}')">Copy</button>
+          </div>
+          <textarea id="${textareaId}" readonly></textarea>
+        `;
+
+        const ta = wrap.querySelector('textarea');
+        ta.value = it.transcript_text || '';
+        ta.scrollTop = 0;
+
+        // Store formatted copy content separately so the textarea can stay as
+        // "transcript only" for manual copy/paste.
+        if (!window.__copyMap) window.__copyMap = {};
+        window.__copyMap[textareaId] = formatTranscriptBlock(it);
+        return wrap;
+      }
+
+      window.__copyOne = function(textareaId) {
+        const txt = (window.__copyMap && window.__copyMap[textareaId]) ? window.__copyMap[textareaId] : '';
+        return copyText(txt);
+      }
+
+      async function fetchTranscripts() {
+        const url = $('url').value.trim();
+        if (!url) { alert('Please paste a YouTube URL.'); return; }
+
+        const maxVideosStr = $('maxVideos').value.trim();
+        const maxVideos = maxVideosStr ? parseInt(maxVideosStr, 10) : null;
+
+        const languagesStr = $('languages').value.trim();
+        const languages = languagesStr ? languagesStr.split(/\\s+/).filter(Boolean) : [];
+
+        $('fetchBtn').disabled = true;
+        $('copyAllBtn').disabled = true;
+        $('downloadCsvBtn').disabled = true;
+        $('busy').textContent = 'Fetching...';
+        $('results').innerHTML = '';
+        $('summary').textContent = '';
+
+        const started = performance.now();
+        try {
+          const res = await fetch('/api/transcript', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url, maxVideos, languages })
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            throw new Error(data && data.error ? data.error : 'Request failed');
+          }
+
+          const items = data.items || [];
+          $('summary').textContent = `Fetched ${items.length} transcript(s) in ${Math.round(performance.now() - started)}ms.`;
+
+          for (let i = 0; i < items.length; i++) {
+            $('results').appendChild(makeItemDom(items[i], i));
+          }
+
+          $('copyAllBtn').disabled = false;
+          $('downloadCsvBtn').disabled = false;
+
+          // Store last response for bulk actions.
+          window.__lastItems = items;
+        } catch (e) {
+          $('summary').textContent = 'Error: ' + (e && e.message ? e.message : String(e));
+          $('busy').textContent = '';
+        } finally {
+          $('busy').textContent = '';
+          $('fetchBtn').disabled = false;
+        }
+      }
+
+      $('fetchBtn').addEventListener('click', fetchTranscripts);
+
+      $('copyAllBtn').addEventListener('click', async () => {
+        const items = window.__lastItems || [];
+        const txt = copyAllText(items);
+        await copyText(txt);
+      });
+
+      $('downloadCsvBtn').addEventListener('click', async () => {
+        const items = window.__lastItems || [];
+        const csv = buildCsv(items);
+        const stamp = new Date().toISOString().replace(/[:.]/g,'-');
+        downloadText('youtube_transcripts_' + stamp + '.csv', csv);
+      });
+    </script>
+  </body>
+</html>
+"""
+
+
+class _Handler(BaseHTTPRequestHandler):
+    server_version = "YouTubeTranscriptUI/0.1"
+
+    def _send_json(self, obj: Any, status: int = 200) -> None:
+        body = json.dumps(obj, ensure_ascii=False).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _send_text(self, text: str, status: int = 200, content_type: str = "text/html; charset=utf-8") -> None:
+        body = text.encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def do_GET(self) -> None:
+        if self.path in ("/", "/index.html"):
+            self._send_text(INDEX_HTML, 200, "text/html; charset=utf-8")
+            return
+        self._send_text("Not Found", 404, "text/plain; charset=utf-8")
+
+    def do_POST(self) -> None:
+        if self.path != "/api/transcript":
+            self._send_text("Not Found", 404, "text/plain; charset=utf-8")
+            return
+
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            raw = self.rfile.read(length) if length > 0 else b"{}"
+            payload = json.loads(raw.decode("utf-8") or "{}")
+        except Exception:
+            self._send_json({"error": "Invalid JSON body"}, 400)
+            return
+
+        url = (payload.get("url") or "").strip()
+        max_videos = payload.get("maxVideos")
+        if max_videos is not None:
+            try:
+                max_videos = int(max_videos)
+                if max_videos <= 0:
+                    max_videos = None
+            except Exception:
+                max_videos = None
+        languages = payload.get("languages") or []
+        if not isinstance(languages, list):
+            languages = []
+        languages = [str(x).strip() for x in languages if str(x).strip()]
+
+        if not url:
+            self._send_json({"error": "Missing 'url' in request"}, 400)
+            return
+
+        start_t = time.time()
+        try:
+            if _is_playlist_url(url):
+                items = _handle_playlist_request(url, max_videos, languages)
+            else:
+                items = _handle_video_request(url, languages)
+            _ = time.time() - start_t  # for future instrumentation
+            self._send_json({"items": items}, 200)
+        except Exception as e:
+            self._send_json({"error": str(e)}, 500)
+
+    def log_message(self, format: str, *args: Any) -> None:
+        # Keep console noise down; only log status line.
+        sys.stderr.write("%s - - [%s] %s\n" % (self.client_address[0], self.log_date_time_string(), format % args))
+
+
+def _handle_video_request(url: str, languages: list[str]) -> list[dict[str, Any]]:
+    vid = _extract_video_id(url)
+    if not vid:
+        raise ValueError("Could not extract a video id from the URL.")
+
+    title = _get_video_title(vid)
+    video_url = f"https://www.youtube.com/watch?v={vid}"
+
+    transcript = _fetch_transcript(vid, languages)
+    return [
+        {
+            "video_id": vid,
+            "title": title,
+            "video_url": video_url,
+            **transcript,
+        }
+    ]
+
+
+def _handle_playlist_request(
+    playlist_url: str, max_videos: int | None, languages: list[str]
+) -> list[dict[str, Any]]:
+    entries = _list_playlist_videos(playlist_url, max_videos=max_videos)
+    if not entries:
+        raise ValueError("Playlist listing returned no videos.")
+
+    out: list[dict[str, Any]] = []
+    for e in entries:
+        vid = e["video_id"]
+        title = e.get("title") or ""
+        video_url = f"https://www.youtube.com/watch?v={vid}"
+        transcript = _fetch_transcript(vid, languages)
+        out.append(
+            {
+                "video_id": vid,
+                "title": title,
+                "video_url": video_url,
+                **transcript,
+            }
+        )
+    return out
+
+
+def main() -> None:
+    p = argparse.ArgumentParser(description="Local YouTube transcript UI")
+    p.add_argument("--host", default="127.0.0.1", help="Host (default: 127.0.0.1)")
+    p.add_argument("--port", type=int, default=7860, help="Port (default: 7860)")
+    args = p.parse_args()
+
+    httpd = ThreadingHTTPServer((args.host, args.port), _Handler)
+    print(f"UI running at http://{args.host}:{args.port}")
+    print("Paste a YouTube video/playlist URL and click \"Fetch transcript(s)\".\n")
+    httpd.serve_forever()
+
+
+if __name__ == "__main__":
+    main()
+
